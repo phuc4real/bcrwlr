@@ -1,0 +1,13 @@
+services:
+  bcrwlr:
+    build: .
+    image: bcrwlr:latest
+    container_name: bcrwlr
+    ports:
+      - "8080:8080"
+    volumes:
+      - bcrwlr-data:/data
+    restart: unless-stopped
+
+volumes:
+  bcrwlr-data:

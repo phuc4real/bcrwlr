@@ -1,0 +1,19 @@
+# Build artifacts (rebuilt inside the image)
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+src/Bcrwlr.Api/wwwroot/
+
+# Runtime archive — must never be baked into the image
+data/
+
+# VCS / IDE / misc
+.git/
+.gitignore
+.vs/
+.vscode/
+*.user
+*.log
+**/.DS_Store
+README.md

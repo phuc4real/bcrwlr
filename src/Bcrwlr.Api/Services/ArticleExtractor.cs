@@ -5,8 +5,12 @@ namespace Bcrwlr.Api.Services;
 /// <summary>Thrown when a page cannot be fetched or no readable article can be extracted.</summary>
 public sealed class ExtractionException(string message) : Exception(message);
 
-/// <summary>The SmartReader result plus the final (post-redirect) URI used as the asset base.</summary>
-public sealed record ExtractedArticle(Article Article, Uri BaseUri);
+/// <summary>
+/// The SmartReader result, the final (post-redirect) URI used as the asset base, and the
+/// post-processed content HTML (code blocks restored). Use <see cref="ContentHtml"/> rather than
+/// <c>Article.Content</c> downstream.
+/// </summary>
+public sealed record ExtractedArticle(Article Article, Uri BaseUri, string ContentHtml, string? LeadImage);
 
 /// <summary>
 /// Fetches a URL and runs Mozilla-Readability extraction (via SmartReader) to obtain
@@ -43,10 +47,13 @@ public sealed class ArticleExtractor(IHttpClientFactory httpFactory, ILogger<Art
             var finalUri = resp.RequestMessage?.RequestUri ?? uri;
             var html = await resp.Content.ReadAsStringAsync(ct);
 
+            // Protect code blocks (readability drops them) behind placeholders before extraction.
+            var pre = HtmlPreprocessor.Normalize(html);
+
             Article article;
             try
             {
-                article = new Reader(finalUri.ToString(), html).GetArticle();
+                article = new Reader(finalUri.ToString(), pre.Html).GetArticle();
             }
             catch (Exception ex)
             {
@@ -57,7 +64,10 @@ public sealed class ArticleExtractor(IHttpClientFactory httpFactory, ILogger<Art
             if (article is null || !article.IsReadable || string.IsNullOrWhiteSpace(article.Content))
                 throw new ExtractionException("No readable article content was found on this page.");
 
-            return new ExtractedArticle(article, finalUri);
+            // Restore the real code blocks into the extracted content.
+            var content = HtmlPreprocessor.RestoreCodeBlocks(article.Content, pre.CodeBlocks);
+
+            return new ExtractedArticle(article, finalUri, content, pre.LeadImage);
         }
     }
 }

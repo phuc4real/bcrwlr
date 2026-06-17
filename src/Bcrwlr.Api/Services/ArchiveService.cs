@@ -1,3 +1,4 @@
+using System.Net;
 using Bcrwlr.Api.Models;
 using SaArticle = SmartReader.Article;
 
@@ -15,9 +16,19 @@ public sealed class ArchiveService(
 {
     public async Task<ArticleSummary> ArchiveAsync(string url, CancellationToken ct)
     {
-        var (article, baseUri) = await extractor.ExtractAsync(url, ct);
+        var (article, baseUri, content, leadImage) = await extractor.ExtractAsync(url, ct);
 
-        var embed = await embedder.EmbedAsync(article.Content, baseUri, ct);
+        // Readability often drops the lead/cover image (it sits outside the article body). Re-add it
+        // from the page metadata, or the detected lead image, when it isn't already in the content.
+        var cover = !string.IsNullOrWhiteSpace(article.FeaturedImage) ? article.FeaturedImage : leadImage;
+        if (!string.IsNullOrWhiteSpace(cover)
+            && !content.Contains(cover, StringComparison.OrdinalIgnoreCase))
+        {
+            var alt = WebUtility.HtmlEncode(article.Title ?? "");
+            content = $"<figure><img src=\"{WebUtility.HtmlEncode(cover)}\" alt=\"{alt}\"></figure>" + content;
+        }
+
+        var embed = await embedder.EmbedAsync(content, baseUri, ct);
 
         var savedAt = DateTime.UtcNow;
         var html = HtmlRenderer.Render(article, baseUri, embed.InlinedHtml);
